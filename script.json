@@ -1,0 +1,14 @@
+{
+  "name": "JavDB Client",
+  "icon": "magnifyingglass.circle.fill",
+  "color": "#A54C72",
+  "version": "0.1.0",
+  "runInApp": true,
+  "description": "JavDB 公开影片资料查询与本地收藏管理原型",
+  "localizedNames": {
+    "zh": "JavDB 客户端"
+  },
+  "localizedDescriptions": {
+    "zh": "JavDB 公开影片资料查询与本地收藏管理原型"
+  }
+}
