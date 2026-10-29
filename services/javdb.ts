@@ -50,17 +50,18 @@ function parseScore(text: string): { rating: string; count: string } {
 }
 
 export function parseSearchResults(html: string): Movie[] {
-  const blocks = html.match(/<div[^>]*class=["'][^"']*item[^"']*["'][\s\S]*?<\/div>\s*<\/div>/gi) ?? []
+  const blocks = html.match(/<a[^>]*class=["'][^"']*box[^"']*["'][\s\S]*?<\/a>/gi) ?? []
   const results: Movie[] = []
 
   for (const block of blocks) {
-    const linkMatch = block.match(/<a[^>]*class=["']box["'][^>]*href=["']([^"']+)["'][^>]*>/i)
+    const linkMatch = block.match(/<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*box[^"']*["'][^>]*>/i)
     if (!linkMatch) continue
 
-    const sourceURL = new URL(linkMatch[1], BASE_URL).toString()
+    const relativeURL = linkMatch[1]
+    const sourceURL = new URL(relativeURL, BASE_URL).toString()
     const titleHTML = firstMatch(block, /<div[^>]*class=["'][^"']*video-title[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)
     const codeMatch = block.match(/<strong[^>]*>([^<]+)<\/strong>/i)
-    const title = titleHTML || attr(block, "title")
+    const title = (titleHTML || attr(block, "title")).replace(/^\s*[^\s]+\s+/, "")
     const code = codeMatch ? decodeHTML(codeMatch[1]).trim() : title.split(/\s+/)[0]
     const imageMatch = block.match(/<img[^>]*src=["']([^"']+)["']/i)
     const cover = imageMatch ? new URL(imageMatch[1], BASE_URL).toString() : ""
@@ -105,7 +106,7 @@ export async function searchJavDB(keyword: string): Promise<Movie[]> {
   if (!response.ok) throw new Error(`JavDB 请求失败：HTTP ${response.status}`)
 
   const html = await response.text()
-  if (/over18|我已滿18歲|我已满18岁/i.test(html) && !/<div[^>]*class=["'][^"']*item/i.test(html)) {
+  if (/over18|我已滿18歲|我已满18岁/i.test(html) && !/<a[^>]*class=["'][^"']*box/i.test(html)) {
     throw new Error("JavDB 需要先完成年龄确认，请先在浏览器打开 JavDB 并确认年龄")
   }
 
