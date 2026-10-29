@@ -73,10 +73,16 @@ export function parseSearchResults(html: string): Movie[] {
   return results
 }
 
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>()
+  return values.map((value) => value.replace(/\s+/g, " ").trim()).filter((value) => value && !seen.has(value) && (seen.add(value), true))
+}
+
 function fieldBlock(html: string, label: string): string {
   const blocks = html.match(/<div[^>]*class=["'][^"']*panel-block[^"']*["'][^>]*>[\s\S]*?(?=<div[^>]*class=["'][^"']*panel-block|<\/nav>)/gi) ?? []
   return blocks.find((block) => new RegExp(`<strong>\\s*${label}\\s*<\\/strong>`, "i").test(block)) ?? ""
 }
+
 
 function fieldValue(html: string, label: string): string {
   const block = fieldBlock(html, label)
@@ -106,8 +112,8 @@ export async function getMovieDetail(movie: Movie): Promise<Movie> {
     date: fieldValue(html, "日期:") || movie.date,
     duration: fieldValue(html, "時長:") || movie.duration,
     maker: linksFromField(html, "片商:")[0] ?? movie.maker,
-    actresses: linksFromField(html, "演員:", "actor-female"),
-    tags: linksFromField(html, "類別:") || movie.tags,
+    actresses: uniqueStrings(linksFromField(html, "演員:", "actor-female")),
+    tags: uniqueStrings(linksFromField(html, "類別:") || movie.tags),
     cover: coverMatch ? new URL(coverMatch[1], BASE_URL).toString() : movie.cover,
     rating: score.rating !== "0" ? score.rating : movie.rating,
     count: score.count !== "0" ? score.count : movie.count,
