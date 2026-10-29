@@ -27,6 +27,10 @@ const JAVDB_HOME = "https://javdb.com/"
 const demoMovies: Movie[] = []
 
 
+function BackButton({ action }: { action: () => void }) {
+  return <Button title="返回" systemImage="chevron.left" action={action} />
+}
+
 function Pill({ text, active = false }: { text: string; active?: boolean }) {
   return (
     <Text
@@ -70,7 +74,7 @@ function MovieCard({ movie, onOpen }: { movie: Movie; onOpen: () => void }) {
   )
 }
 
-function MovieDetail({ movie }: { movie: Movie }) {
+function MovieDetail({ movie, onBack }: { movie: Movie; onBack: () => void }) {
   const [saved, setSaved] = useState(false)
   const [watched, setWatched] = useState(false)
   const [note, setNote] = useState("")
@@ -78,6 +82,12 @@ function MovieDetail({ movie }: { movie: Movie }) {
   return (
     <ScrollView>
       <VStack alignment="leading" spacing={16} padding={16}>
+        <HStack>
+          <BackButton action={onBack} />
+          <Spacer />
+          <Text font="headline" bold={true}>{movie.code}</Text>
+          <Spacer />
+        </HStack>
         <HStack spacing={14}>
           <Image imageUrl={movie.cover} frame={{ width: 128, height: 172 }} clipShape={{ type: "rect", cornerRadius: 16 }} />
           <VStack alignment="leading" spacing={8}>
@@ -101,7 +111,7 @@ function MovieDetail({ movie }: { movie: Movie }) {
         </Section>
 
         <Section title="女优">
-          {movie.actresses.map((name) => (
+          {movie.actresses.map((name: string) => (
             <NavigationLink key={name} destination={<ActressView name={name} />}>
               <Label title={name} systemImage="person.crop.circle" />
             </NavigationLink>
@@ -109,7 +119,7 @@ function MovieDetail({ movie }: { movie: Movie }) {
         </Section>
 
         <Section title="标签">
-          <HStack spacing={8}>{movie.tags.map((tag) => <Pill key={tag} text={tag} active={true} />)}</HStack>
+          <HStack spacing={8}>{movie.tags.map((tag: string) => <Pill key={tag} text={tag} active={true} />)}</HStack>
         </Section>
 
         <Section title="个人备注">
@@ -117,7 +127,7 @@ function MovieDetail({ movie }: { movie: Movie }) {
         </Section>
 
         <Section title="更多操作">
-          <Button title="打开 JavDB 原页面" systemImage="safari" action={() => Safari.present(`${JAVDB_HOME}search?q=${encodeURIComponent(movie.code)}`)} />
+          <Button title="打开 JavDB 原页面" systemImage="safari" action={() => Safari.present(movie.sourceURL || `${JAVDB_HOME}search?q=${encodeURIComponent(movie.code)}`)} />
           <Button title="复制番号" systemImage="doc.on.doc" action={() => Pasteboard.setString(movie.code)} />
           <Button title="分享影片信息" systemImage="square.and.arrow.up" action={() => ShareSheet.present([`${movie.code} ${movie.title}`])} />
         </Section>
@@ -127,10 +137,12 @@ function MovieDetail({ movie }: { movie: Movie }) {
 }
 
 function ActressView({ name }: { name: string }) {
+  const dismiss = Navigation.useDismiss()
   const [favorite, setFavorite] = useState(false)
   return (
     <ScrollView>
       <VStack alignment="leading" spacing={16} padding={16}>
+        <BackButton action={dismiss} />
         <HStack spacing={14}>
           <ZStack frame={{ width: 90, height: 110 }} background="#E9DDE3" clipShape={{ type: "rect", cornerRadius: 16 }}>
             <Image systemName="person.crop.circle.fill" frame={{ width: 58, height: 58 }} foregroundStyle="#9D7B89" />
@@ -185,7 +197,7 @@ function HomeView({ onOpen }: { onOpen: (movie: Movie) => void }) {
         </HStack>
         <Text font="subheadline" foregroundStyle="#777">公开影片资料 · 本地收藏管理</Text>
         <HStack spacing={8}>
-          <NavigationLink destination={<SearchView onOpen={onOpen} />}><Pill text="搜索" active={true} /></NavigationLink>
+          <NavigationLink destination={<SearchView onOpen={onOpen} showBack={true} />}><Pill text="搜索" active={true} /></NavigationLink>
           <Pill text="女优" />
           <Pill text="收藏" />
           <Pill text="历史" />
@@ -210,7 +222,8 @@ function HomeView({ onOpen }: { onOpen: (movie: Movie) => void }) {
   )
 }
 
-function SearchView({ onOpen }: { onOpen: (movie: Movie) => void }) {
+function SearchView({ onOpen, showBack = false }: { onOpen: (movie: Movie) => void; showBack?: boolean }) {
+  const dismiss = Navigation.useDismiss()
   const [keyword, setKeyword] = useState("")
   const [searched, setSearched] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -237,6 +250,7 @@ function SearchView({ onOpen }: { onOpen: (movie: Movie) => void }) {
   return (
     <ScrollView>
       <VStack alignment="leading" spacing={14} padding={16}>
+        {showBack ? <BackButton action={dismiss} /> : null}
         <TextField title="搜索" prompt="输入番号、影片、女优" value={keyword} onChanged={setKeyword} />
         <Button title={loading ? "搜索中…" : "开始搜索"} systemImage="magnifyingglass" action={performSearch} />
         <HStack spacing={8}>
@@ -291,7 +305,7 @@ export default function App() {
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null)
   const openMovie = (movie: Movie) => setSelectedMovie(movie)
   if (selectedMovie) {
-    return <NavigationStack navigationTitle={selectedMovie.code} navigationBarTitleDisplayMode="inline"><MovieDetail movie={selectedMovie} /></NavigationStack>
+    return <NavigationStack navigationTitle={selectedMovie.code} navigationBarTitleDisplayMode="inline"><MovieDetail movie={selectedMovie} onBack={() => setSelectedMovie(null)} /></NavigationStack>
   }
   return (
     <NavigationStack>
