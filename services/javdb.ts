@@ -92,11 +92,8 @@ export function parseSearchResults(html: string): Movie[] {
   return results
 }
 
-export async function searchJavDB(keyword: string): Promise<Movie[]> {
-  const query = keyword.trim()
-  if (!query) return []
-
-  const url = `${BASE_URL}/search?q=${encodeURIComponent(query)}`
+export async function fetchJavDBPage(path = "/"): Promise<Movie[]> {
+  const url = `${BASE_URL}${path}`
   const response = await fetch(url, {
     headers: {
       "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148",
@@ -104,11 +101,15 @@ export async function searchJavDB(keyword: string): Promise<Movie[]> {
     },
   })
   if (!response.ok) throw new Error(`JavDB 请求失败：HTTP ${response.status}`)
-
   const html = await response.text()
-  if (/over18|我已滿18歲|我已满18岁/i.test(html) && !/<a[^>]*class=["'][^"']*box/i.test(html)) {
-    throw new Error("JavDB 需要先完成年龄确认，请先在浏览器打开 JavDB 并确认年龄")
+  if (!/<a[^>]*class=["'][^"']*box/i.test(html)) {
+    throw new Error("JavDB 没有返回影片列表，可能需要先完成年龄确认或遇到了访问限制")
   }
-
   return parseSearchResults(html)
+}
+
+export async function searchJavDB(keyword: string): Promise<Movie[]> {
+  const query = keyword.trim()
+  if (!query) return []
+  return fetchJavDBPage(`/search?q=${encodeURIComponent(query)}`)
 }

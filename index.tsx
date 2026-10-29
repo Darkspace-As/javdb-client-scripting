@@ -15,9 +15,10 @@ import {
   TextField,
   VStack,
   ZStack,
+  useEffect,
   useState,
 } from "scripting"
-import { searchJavDB, type Movie } from "./services/javdb"
+import { searchJavDB, fetchJavDBPage, type Movie } from "./services/javdb"
 
 const ACCENT = "#A54C72"
 const SOFT = "#F8E6EE"
@@ -151,7 +152,28 @@ function ActressView({ name }: { name: string }) {
 }
 
 function HomeView({ onOpen }: { onOpen: (movie: Movie) => void }) {
-  const [category, setCategory] = useState("有码")
+  const [category, setCategory] = useState("全部")
+  const [movies, setMovies] = useState<Movie[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  const loadHome = async () => {
+    setLoading(true)
+    setError("")
+    try {
+      setMovies((await fetchJavDBPage("/")).slice(0, 12))
+    } catch (e) {
+      setMovies([])
+      setError(e instanceof Error ? e.message : "首页加载失败")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadHome()
+  }, [])
+
   return (
     <ScrollView>
       <VStack alignment="leading" spacing={16} padding={16}>
@@ -170,12 +192,19 @@ function HomeView({ onOpen }: { onOpen: (movie: Movie) => void }) {
         </HStack>
         <Text font="title2" bold={true}>近期更新</Text>
         <HStack spacing={8}>
-          {['有码', '无码', '欧美', '动漫', 'FC2'].map((item) => (
+          {['全部', '有码', '无码', '欧美', '动漫', 'FC2'].map((item) => (
             <Button key={item} action={() => setCategory(item)}><Pill text={item} active={category === item} /></Button>
           ))}
         </HStack>
-        <Text font="title3" bold={true}>推荐与关注</Text>
-        {demoMovies.map((movie) => <MovieCard key={movie.id} movie={movie} onOpen={() => onOpen(movie)} />)}
+        <HStack>
+          <Text font="title3" bold={true}>推荐与关注</Text>
+          <Spacer />
+          <Button title="刷新" systemImage="arrow.clockwise" action={loadHome} />
+        </HStack>
+        {loading ? <Text foregroundStyle="#777" padding={{ vertical: 36 }}>正在加载 JavDB 公开数据…</Text> : null}
+        {error ? <VStack alignment="leading" spacing={8}><Text foregroundStyle="#B3261E">{error}</Text><Button title="重试" systemImage="arrow.clockwise" action={loadHome} /></VStack> : null}
+        {!loading && !error && movies.length === 0 ? <Text foregroundStyle="#777" padding={{ vertical: 36 }}>暂时没有公开影片数据</Text> : null}
+        {movies.map((movie) => <MovieCard key={movie.id} movie={movie} onOpen={() => onOpen(movie)} />)}
       </VStack>
     </ScrollView>
   )
