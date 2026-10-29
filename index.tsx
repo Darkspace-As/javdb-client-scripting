@@ -18,7 +18,8 @@ import {
   useEffect,
   useState,
 } from "scripting"
-import { searchJavDB, fetchJavDBPage, type Movie } from "./services/javdb"
+import { searchJavDB, fetchJavDBPage, getMovieDetail, type Movie } from "./services/javdb"
+import { addHistory, getRecord, listRecords, saveRecord, type LocalRecord } from "./services/store"
 
 const ACCENT = "#A54C72"
 const SOFT = "#F8E6EE"
@@ -75,9 +76,22 @@ function MovieCard({ movie, onOpen }: { movie: Movie; onOpen: () => void }) {
 }
 
 function MovieDetail({ movie, onBack }: { movie: Movie; onBack: () => void }) {
-  const [saved, setSaved] = useState(false)
-  const [watched, setWatched] = useState(false)
-  const [note, setNote] = useState("")
+  const initialRecord = getRecord(movie.id)
+  const [detail, setDetail] = useState<Movie>(movie)
+  const [detailLoading, setDetailLoading] = useState(true)
+  const [detailError, setDetailError] = useState("")
+  const [saved, setSaved] = useState(initialRecord?.favorite ?? false)
+  const [wanted, setWanted] = useState(initialRecord?.want ?? false)
+  const [watched, setWatched] = useState(initialRecord?.watched ?? false)
+  const [note, setNote] = useState(initialRecord?.note ?? "")
+
+  useEffect(() => {
+    addHistory(movie)
+    getMovieDetail(movie)
+      .then(setDetail)
+      .catch((e) => setDetailError(e instanceof Error ? e.message : "详情加载失败"))
+      .finally(() => setDetailLoading(false))
+  }, [movie.id])
 
   return (
     <ScrollView>
@@ -85,51 +99,48 @@ function MovieDetail({ movie, onBack }: { movie: Movie; onBack: () => void }) {
         <HStack>
           <BackButton action={onBack} />
           <Spacer />
-          <Text font="headline" bold={true}>{movie.code}</Text>
+          <Text font="headline" bold={true}>{detail.code}</Text>
           <Spacer />
         </HStack>
         <HStack spacing={14}>
-          <Image imageUrl={movie.cover} frame={{ width: 128, height: 172 }} clipShape={{ type: "rect", cornerRadius: 16 }} />
+          <Image imageUrl={detail.cover} frame={{ width: 128, height: 172 }} clipShape={{ type: "rect", cornerRadius: 16 }} />
           <VStack alignment="leading" spacing={8}>
-            <Text font="title2" bold={true}>{movie.code}</Text>
-            <Text font="headline">{movie.title}</Text>
-            <Text foregroundStyle="#D07A24" font="title3">★ {movie.rating}</Text>
-            <Text font="caption" foregroundStyle="#777">评分人数：{movie.count}</Text>
+            <Text font="title2" bold={true}>{detail.code}</Text>
+            <Text font="headline">{detail.title}</Text>
+            <Text foregroundStyle="#D07A24" font="title3">★ {detail.rating}</Text>
+            <Text font="caption" foregroundStyle="#777">评分人数：{detail.count}</Text>
           </VStack>
         </HStack>
-
+        {detailLoading ? <Text foregroundStyle="#777">正在读取 JavDB 详情…</Text> : null}
+        {detailError ? <Text foregroundStyle="#B3261E">{detailError}</Text> : null}
         <HStack spacing={8}>
-          <Button title={saved ? "已收藏" : "收藏"} systemImage={saved ? "heart.fill" : "heart"} action={() => setSaved(!saved)} />
-          <Button title={watched ? "已看过" : "标记看过"} systemImage="checkmark.circle" action={() => setWatched(!watched)} />
+          <Button title={saved ? "已收藏" : "收藏"} systemImage={saved ? "heart.fill" : "heart"} action={() => { const next = !saved; setSaved(next); saveRecord(detail, { favorite: next }) }} />
+          <Button title={wanted ? "已想看" : "想看"} systemImage={wanted ? "bookmark.fill" : "bookmark"} action={() => { const next = !wanted; setWanted(next); saveRecord(detail, { want: next }) }} />
+          <Button title={watched ? "已看过" : "标记看过"} systemImage="checkmark.circle" action={() => { const next = !watched; setWatched(next); saveRecord(detail, { watched: next }) }} />
         </HStack>
-
         <Section title="影片信息">
-          <Text>发行日期：{movie.date}</Text>
-          <Text>片长：{movie.duration}</Text>
-          <Text>制作商：{movie.maker}</Text>
-          <Text>字幕：{movie.subtitle ? "有" : "无"}</Text>
+          <Text>发行日期：{detail.date}</Text>
+          <Text>片长：{detail.duration || "未知"}</Text>
+          <Text>制作商：{detail.maker || "未知"}</Text>
+          <Text>字幕：{detail.subtitle ? "有" : "无"}</Text>
         </Section>
-
         <Section title="女优">
-          {movie.actresses.map((name: string) => (
+          {detail.actresses.map((name: string) => (
             <NavigationLink key={name} destination={<ActressView name={name} />}>
               <Label title={name} systemImage="person.crop.circle" />
             </NavigationLink>
           ))}
         </Section>
-
         <Section title="标签">
-          <HStack spacing={8}>{movie.tags.map((tag: string) => <Pill key={tag} text={tag} active={true} />)}</HStack>
+          <HStack spacing={8}>{detail.tags.map((tag: string) => <Pill key={tag} text={tag} active={true} />)}</HStack>
         </Section>
-
         <Section title="个人备注">
-          <TextField title="备注" prompt="记录你的想法、评分或整理信息" value={note} onChanged={setNote} />
+          <TextField title="备注" prompt="记录你的想法、评分或整理信息" value={note} onChanged={(value) => { setNote(value); saveRecord(detail, { note: value }) }} />
         </Section>
-
         <Section title="更多操作">
-          <Button title="打开 JavDB 原页面" systemImage="safari" action={() => Safari.present(movie.sourceURL || `${JAVDB_HOME}search?q=${encodeURIComponent(movie.code)}`)} />
-          <Button title="复制番号" systemImage="doc.on.doc" action={() => Pasteboard.setString(movie.code)} />
-          <Button title="分享影片信息" systemImage="square.and.arrow.up" action={() => ShareSheet.present([`${movie.code} ${movie.title}`])} />
+          <Button title="打开 JavDB 原页面" systemImage="safari" action={() => Safari.present(detail.sourceURL || `${JAVDB_HOME}search?q=${encodeURIComponent(detail.code)}`)} />
+          <Button title="复制番号" systemImage="doc.on.doc" action={() => Pasteboard.setString(detail.code)} />
+          <Button title="分享影片信息" systemImage="square.and.arrow.up" action={() => ShareSheet.present([`${detail.code} ${detail.title}`])} />
         </Section>
       </VStack>
     </ScrollView>
@@ -267,6 +278,14 @@ function SearchView({ onOpen, showBack = false }: { onOpen: (movie: Movie) => vo
 
 function LibraryView({ onOpen }: { onOpen: (movie: Movie) => void }) {
   const [filter, setFilter] = useState("收藏")
+  const [records, setRecords] = useState<LocalRecord[]>([])
+
+  useEffect(() => {
+    if (filter !== "女优") {
+      const key = filter === "收藏" ? "favorite" : filter === "想看" ? "want" : "watched"
+      setRecords(listRecords(key))
+    }
+  }, [filter])
   return (
     <ScrollView>
       <VStack alignment="leading" spacing={14} padding={16}>
@@ -275,7 +294,7 @@ function LibraryView({ onOpen }: { onOpen: (movie: Movie) => void }) {
           {['收藏', '想看', '看过', '女优'].map((item) => <Button key={item} action={() => setFilter(item)}><Pill text={item} active={filter === item} /></Button>)}
         </HStack>
         <Text foregroundStyle="#777">支持备注、标签、个人评分、批量整理与 JSON 导出</Text>
-        {filter === "女优" ? <ActressView name="我的女优" /> : demoMovies.map((movie) => <MovieCard key={movie.id} movie={movie} onOpen={() => onOpen(movie)} />)}
+        {filter === "女优" ? <Text foregroundStyle="#777">女优收藏将在下一阶段接入</Text> : records.length === 0 ? <Text foregroundStyle="#777" padding={{ vertical: 36 }}>这里还没有内容。打开影片详情后点击收藏、想看或看过即可保存。</Text> : records.map((record) => <MovieCard key={record.movie.id} movie={record.movie} onOpen={() => onOpen(record.movie)} />)}
       </VStack>
     </ScrollView>
   )
