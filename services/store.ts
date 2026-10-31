@@ -1,3 +1,5 @@
+import { validateBackup } from "./backup"
+import { safeRating } from "./state"
 import type { Movie } from "./javdb"
 
 export type LocalRecord = {
@@ -25,7 +27,7 @@ function readRecords(): Record<string, LocalRecord> { return Storage.get<Record<
 function writeRecords(records: Record<string, LocalRecord>): void { Storage.set(KEY, records) }
 function readActresses(): Record<string, ActressRecord> { return Storage.get<Record<string, ActressRecord>>(ACTRESS_KEY) ?? {} }
 export function getRecord(id: string): LocalRecord | null { return readRecords()[id] ?? null }
-export function saveRecord(movie: Movie, patch: Partial<Omit<LocalRecord, "movie">>): LocalRecord { const records = readRecords(); const previous = records[movie.id]; const next: LocalRecord = { movie, favorite: previous?.favorite ?? false, want: previous?.want ?? false, watched: previous?.watched ?? false, note: previous?.note ?? "", personalRating: previous?.personalRating ?? 0, updatedAt: Date.now(), ...patch }; records[movie.id] = next; writeRecords(records); return next }
+export function saveRecord(movie: Movie, patch: Partial<Omit<LocalRecord, "movie">>): LocalRecord { if (patch.personalRating !== undefined && safeRating(String(patch.personalRating)) === null) throw new Error("个人评分必须为0至10的有限数"); const records = readRecords(); const previous = records[movie.id]; const next: LocalRecord = { movie, favorite: previous?.favorite ?? false, want: previous?.want ?? false, watched: previous?.watched ?? false, note: previous?.note ?? "", personalRating: previous?.personalRating ?? 0, updatedAt: Date.now(), ...patch }; records[movie.id] = next; writeRecords(records); return next }
 export function deleteRecords(ids: string[]): void { const records = readRecords(); ids.forEach((id) => delete records[id]); writeRecords(records) }
 export function moveRecords(ids: string[], target: "favorite" | "want" | "watched"): void { const records = readRecords(); ids.forEach((id) => { const record = records[id]; if (!record) return; records[id] = { ...record, [target]: true, updatedAt: Date.now() } }); writeRecords(records) }
 export function listRecords(filter?: "favorite" | "want" | "watched"): LocalRecord[] { return Object.values(readRecords()).filter((record) => filter ? record[filter] : true).sort((a, b) => b.updatedAt - a.updatedAt) }
@@ -45,4 +47,21 @@ export function setCachedMovies(key: string, movies: Movie[]): void { Storage.se
 export function getCachedRecords(): LocalRecord[] { return Storage.get<LocalRecord[]>(LIBRARY_CACHE_KEY) ?? [] }
 export function setCachedRecords(records: LocalRecord[]): void { Storage.set(LIBRARY_CACHE_KEY, records) }
 export function exportLocalData(): string { const data: LocalData = { records: readRecords(), history: listHistory(), actresses: readActresses(), searchHistory: listSearchHistory(), settings: getSettings() }; return JSON.stringify({ version: 2, exportedAt: new Date().toISOString(), ...data }, null, 2) }
-export function importLocalData(json: string): { records: number; history: number; actresses: number } { const parsed = JSON.parse(json) as Partial<LocalData>; if (!parsed || typeof parsed !== "object") throw new Error("JSON 格式无效"); if (parsed.records && typeof parsed.records === "object") writeRecords(parsed.records as Record<string, LocalRecord>); if (Array.isArray(parsed.history)) Storage.set(HISTORY_KEY, parsed.history); if (parsed.actresses && typeof parsed.actresses === "object") Storage.set(ACTRESS_KEY, parsed.actresses); if (Array.isArray(parsed.searchHistory)) Storage.set(SEARCH_KEY, parsed.searchHistory); if (parsed.settings && typeof parsed.settings === "object") Storage.set(SETTINGS_KEY, parsed.settings); return { records: Object.keys(parsed.records ?? {}).length, history: parsed.history?.length ?? 0, actresses: Object.keys(parsed.actresses ?? {}).length } }
+export function previewImport(json: string) { const data = validateBackup(json); return { records: Object.keys(data.records).length, history: data.history.length, actresses: Object.keys(data.actresses).length } }
+function writeData(data: LocalData): void { writeRecords(data.records); Storage.set(HISTORY_KEY, data.history); Storage.set(ACTRESS_KEY, data.actresses); Storage.set(SEARCH_KEY, data.searchHistory); Storage.set(SETTINGS_KEY, data.settings) }
+export function importLocalData(json: string, mode: "merge" | "replace" = "merge"): { records: number; history: number; actresses: number } {
+  const imported = validateBackup(json)
+  const current: LocalData = { records: readRecords(), history: listHistory(), actresses: readActresses(), searchHistory: listSearchHistory(), settings: getSettings() }
+  const next: LocalData = mode === "replace" ? imported : {
+    records: { ...current.records }, actresses: { ...current.actresses }, settings: current.settings,
+    history: [...imported.history, ...current.history.filter(m => !imported.history.some(i => i.id === m.id))].slice(0, 50),
+    searchHistory: [...new Set([...imported.searchHistory, ...current.searchHistory])].slice(0, 20)
+  }
+  if (mode === "merge") {
+    Object.entries(imported.records).forEach(([id, record]) => { if (!next.records[id] || record.updatedAt > next.records[id].updatedAt) next.records[id] = record })
+    Object.entries(imported.actresses).forEach(([name, record]) => { if (!next.actresses[name] || record.updatedAt > next.actresses[name].updatedAt) next.actresses[name] = record })
+  }
+  Storage.set("javdb.client.pre-import-recovery.v2", current)
+  try { writeData(next) } catch (error) { writeData(current); throw error }
+  return previewImport(json)
+}
