@@ -10,9 +10,11 @@ const PURPLE = "#914C72"
 const PURPLE_DARK = "#713A59"
 const JAVDB_HOME = "https://javdb.com/"
 
+import { ActressDirectory, ResourceSearch } from "./Explore"
+import Collection from "./Collection"
 import MoreView from "./DataView"
 import HomeView, { clearCatalogCache } from "./Home"
-import { popPage, appendUnique, safeRating, type Page } from "./services/state"
+import { popPage, appendUnique, safeRating, type Page, type NewPage } from "./services/state"
 function BackButton({ action }: { action: () => void }) { return <Button title="返回" systemImage="chevron.left" action={action} /> }
 function MovieCard({ movie, onOpen }: { movie: Movie; onOpen: () => void }) { return <Button action={onOpen} buttonStyle="plain"><HStack spacing={12} padding={10}><Image imageUrl={movie.cover} frame={{ width: 82, height: 110 }} clipShape={{ type: "rect", cornerRadius: 12 }} /><VStack alignment="leading" spacing={5}><Text font="headline" bold={true} lineLimit={2}>{movie.title}</Text><Text foregroundStyle={ACCENT}>{movie.code}</Text><Text font="caption" foregroundStyle={MUTED}>{movie.date} · {movie.duration || "时长未知"}</Text><Text font="caption" foregroundStyle={GOLD}>★ {movie.rating || "0"} · {movie.count || "0"} 人评分</Text></VStack><Spacer /></HStack></Button> }
 function ErrorView({ message, retry }: { message: string; retry: () => void }) { return <VStack alignment="leading" spacing={10} padding={{ vertical: 28 }}><Text foregroundStyle="#B3261E">{message}</Text><Button title="重试" systemImage="arrow.clockwise" action={retry} /></VStack> }
@@ -37,7 +39,7 @@ export default function App() {
   const [tab, setTab] = useState(0)
   const [revision, setRevision] = useState(0)
   const [accepted, setAccepted] = useState(!getSettings().showAdultWarning)
-  const push = (page: Omit<Extract<Page, { type: "movie" }>, "id"> | Omit<Extract<Page, { type: "actress" }>, "id"> | { type: "history" | "settings" }) => {
+  const push = (page: NewPage) => {
     const id = nextId.current++
     setPages(old => [...old, { ...page, id } as Page])
   }
@@ -47,13 +49,13 @@ export default function App() {
   if (!accepted) return <NavigationStack><VStack spacing={20} padding={24}><Text font="title2" bold>内容与隐私提示</Text><Text>本脚本展示成人影片公开资料。请确认你已达到所在地法定年龄，并遵守当地法律。收藏和备注保存在设备本地，不执行账号登录或同步。</Text><Button title="已达到法定年龄，继续" action={() => setAccepted(true)} /><Button title="退出" action={() => Script.exit()} /></VStack></NavigationStack>
   return <NavigationStack><ZStack>
     <TabView tabIndex={tab} onTabIndexChanged={setTab} hidden={pages.length > 0} allowsHitTesting={pages.length === 0} accessibilityHidden={pages.length > 0}>
-      <VStack tabItem={<Label title="首页" systemImage="house.fill" />}><HomeView revision={revision} active={tab === 0 && pages.length === 0} onOpen={openMovie} onSearch={() => setTab(1)} onHistory={() => push({ type: "history" })} onSettings={() => push({ type: "settings" })} /></VStack>
+      <VStack tabItem={<Label title="首页" systemImage="house.fill" />}><HomeView revision={revision} active={tab === 0 && pages.length === 0} onOpen={openMovie} onSearch={() => setTab(1)} onHistory={() => push({ type: "history" })} onAll={(category) => push({ type: "catalog", category })} onActresses={() => push({ type: "actresses" })} onResources={() => push({ type: "resources" })} onLibrary={() => push({ type: "collection" })} onSettings={() => push({ type: "settings" })} /></VStack>
       <VStack tabItem={<Label title="搜索" systemImage="magnifyingglass" />}><SearchView onOpen={openMovie} onBack={() => setTab(0)} /></VStack>
       <VStack tabItem={<Label title="收藏" systemImage="heart.fill" />}><LibraryView revision={revision} onOpen={openMovie} onActress={openActress} /></VStack>
       <VStack tabItem={<Label title="我的" systemImage="person.fill" />}><MoreView onSettings={() => push({ type: "settings" })} onDataChanged={() => setRevision(n => n + 1)} /></VStack>
     </TabView>
     {pages.map((page, index) => <VStack key={page.id} background="#FFFFFF" hidden={index !== pages.length - 1} allowsHitTesting={index === pages.length - 1} accessibilityHidden={index !== pages.length - 1}>
-      {page.type === "movie" ? <DetailView movie={page.movie} onBack={pop} onActress={openActress} /> : page.type === "actress" ? <ActressView name={page.name} onBack={pop} /> : page.type === "history" ? <HistoryView revision={revision} onOpen={openMovie} onBack={pop} /> : <SettingsView onBack={pop} />}
+      {page.type === "movie" ? <DetailView movie={page.movie} onBack={pop} onActress={openActress} /> : page.type === "actress" ? <ActressView name={page.name} onBack={pop} /> : page.type === "history" ? <HistoryView revision={revision} onOpen={openMovie} onBack={pop} /> : page.type === "catalog" ? <HomeView initialCategory={page.category} onBack={pop} onOpen={openMovie} onSearch={() => { setPages([]); setTab(1) }} onHistory={() => push({ type: "history" })} onSettings={() => push({ type: "settings" })} active={index === pages.length - 1} revision={revision} /> : page.type === "actresses" ? <ActressDirectory onBack={pop} onActress={openActress} /> : page.type === "resources" ? <ResourceSearch onBack={pop} onOpen={openMovie} /> : page.type === "collection" ? <Collection revision={revision} onBack={pop} onMovie={openMovie} onActress={openActress} onManage={() => { setPages([]); setTab(2) }} /> : <SettingsView onBack={pop} />}
     </VStack>)}
   </ZStack></NavigationStack>
 }
