@@ -1,6 +1,7 @@
 import { popPage, appendUnique, safeRating, type Page } from "./services/state"
 import { validateBackup } from "./services/backup"
 import { parseCatalog } from "./services/catalog"
+import { parseActors } from "./services/actors"
 import { Script } from "scripting"
 const results: string[] = []
 function test(name: string, fn: () => void) { try { fn(); results.push(`PASS ${name}`) } catch (e) { results.push(`FAIL ${name}: ${e instanceof Error ? e.message : e}`) } }
@@ -28,5 +29,8 @@ test("验证页提示", () => { let message = ""; try { parseCatalog('<html>Just
 test("真实空列表可解析", () => assert(!parseCatalog('<div class="movie-list"></div>', 1).hasMore))
 test("新增入口路由可逐层返回", () => { const root: Page[] = [{ id: 1, type: "catalog", category: "有码" }, { id: 2, type: "movie", movie }, { id: 3, type: "actress", name: "fixture" }]; assert(popPage(root)[0].type === "catalog"); assert(popPage(popPage(root)).length === 1); assert(popPage(popPage(popPage(root))).length === 0) })
 test("四入口页面类型覆盖", () => { const entries: Page[] = [{ id: 1, type: "catalog", category: "有码" }, { id: 2, type: "actresses" }, { id: 3, type: "resources" }, { id: 4, type: "collection" }]; assert(new Set(entries.map(p => p.type)).size === 4) })
+test("演员真实头像与去重", () => { const card = '<a href="/actors/TestId"><img class="avatar" src="https://example.com/actor.jpg"><strong>Test &amp; Name</strong></a>'; const actors = parseActors(card + card, "https://javdb.com/actors/uncensored"); assert(actors.length === 1 && actors[0].name === "Test & Name" && actors[0].avatar === "https://example.com/actor.jpg") })
+test("拒绝缺头像的演员列表", () => { let rejected = false; try { parseActors('<a href="/actors/Test"><strong>Test</strong></a>', "https://javdb.com/actors") } catch { rejected = true }; assert(rejected) })
+test("演员目录外站链接不当作真实演员", () => { let rejected = false; try { parseActors('<a href="https://example.com/actors/Test"><img class="avatar" src="https://example.com/a.jpg"><strong>Test</strong></a>', "https://javdb.com/actors") } catch { rejected = true }; assert(rejected) })
 console.log(results.join("\n"))
 Script.exit({ total: results.length, failed: results.filter(s => s.startsWith("FAIL")).length })
